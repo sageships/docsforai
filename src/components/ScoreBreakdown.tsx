@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 
+import { cn } from '@/lib/utils';
 import type { ScoreBreakdown } from '@/types';
 
 interface ScoreBreakdownProps {
@@ -51,7 +52,10 @@ function CategoryRow({ item }: CategoryRowProps) {
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-semibold text-gray-200">{item.category}</span>
             <span
-              className={`text-sm font-bold ml-2 flex-shrink-0 ${getTextColor(item.score, item.maxScore)}`}
+              className={cn(
+                'text-sm font-bold ml-2 flex-shrink-0',
+                getTextColor(item.score, item.maxScore),
+              )}
             >
               {item.score}/{item.maxScore}
             </span>
@@ -59,7 +63,10 @@ function CategoryRow({ item }: CategoryRowProps) {
 
           <div className="w-full bg-gray-700 rounded-full h-2">
             <div
-              className={`h-2 rounded-full transition-all duration-700 ease-out ${getBarColor(item.score, item.maxScore)}`}
+              className={cn(
+                'h-2 rounded-full transition-all duration-700 ease-out',
+                getBarColor(item.score, item.maxScore),
+              )}
               style={{ width: `${pct}%` }}
             />
           </div>

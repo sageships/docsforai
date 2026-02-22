@@ -1,7 +1,8 @@
+import { getYear } from 'date-fns';
 import Link from 'next/link';
 
 export default function Footer() {
-  const year = new Date().getFullYear();
+  const year = getYear(new Date());
 
   return (
     <footer className="w-full border-t border-gray-800 bg-gray-950 mt-auto">

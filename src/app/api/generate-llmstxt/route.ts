@@ -6,12 +6,8 @@ import { crawlDocs, type CrawlResult } from '@/lib/crawler';
 import { safeJsonParse } from '@/lib/json-utils';
 import { generateLlmsTxt } from '@/lib/llmstxt-generator';
 import prisma from '@/lib/prisma';
+import { GenerateLlmsTxtRequestSchema } from '@/lib/schemas';
 import { isPublicUrl } from '@/lib/url-validator';
-
-interface GenerateRequestBody {
-  url?: string;
-  scanId?: string;
-}
 
 interface GenerateResponse {
   llmsTxt: string;
@@ -19,26 +15,24 @@ interface GenerateResponse {
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  // ── Parse body ─────────────────────────────────────────────────────────────
-  let body: GenerateRequestBody;
+  // ── Parse & validate body ──────────────────────────────────────────────────
+  let rawBody: unknown;
   try {
-    body = (await request.json()) as GenerateRequestBody;
+    rawBody = await request.json();
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { url, scanId } = body;
-
-  if (!url && !scanId) {
-    return NextResponse.json({ error: 'Either url or scanId is required' }, { status: 400 });
+  const parsed = GenerateLlmsTxtRequestSchema.safeParse(rawBody);
+  if (!parsed.success) {
+    const message = parsed.error.issues[0]?.message ?? 'Invalid request body';
+    return NextResponse.json({ error: message }, { status: 400 });
   }
+
+  const { url, scanId } = parsed.data;
 
   // ── Path 1: Use existing scan data ─────────────────────────────────────────
   if (scanId) {
-    if (typeof scanId !== 'string' || scanId.trim() === '') {
-      return NextResponse.json({ error: 'scanId must be a non-empty string' }, { status: 400 });
-    }
-
     let scan: {
       status: string;
       llmsTxt: string | null;
@@ -94,7 +88,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   // ── Path 2: Fresh crawl from URL ───────────────────────────────────────────
-  if (!url || typeof url !== 'string') {
+  if (!url) {
     return NextResponse.json({ error: 'url must be a non-empty string' }, { status: 400 });
   }
 

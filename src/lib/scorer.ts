@@ -1,3 +1,5 @@
+import { getYear } from 'date-fns';
+
 import type { CrawlResult, CrawledPage } from './crawler';
 
 export interface ScoreBreakdown {
@@ -427,7 +429,7 @@ function scoreFreshness(crawl: CrawlResult): ScoreBreakdown {
   }
 
   // 3. Copyright year current — up to 3 pts
-  const currentYear = new Date().getFullYear();
+  const currentYear = getYear(new Date());
   const allPageText = pages.map((p) => p.textContent).join(' ');
   const hasCurrentYear = allPageText.includes(String(currentYear));
   const hasLastYear = allPageText.includes(String(currentYear - 1));

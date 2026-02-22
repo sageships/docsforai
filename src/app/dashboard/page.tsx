@@ -1,5 +1,6 @@
 'use client';
 
+import { format } from 'date-fns';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -28,11 +29,7 @@ function getStatusBadge(status: ScanSummary['status']) {
 }
 
 function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
+  return format(new Date(dateStr), 'MMM d, yyyy');
 }
 
 export default function DashboardPage() {

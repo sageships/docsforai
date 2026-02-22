@@ -1,36 +1,21 @@
+import type { z } from 'zod';
+
+import { EnvSchema } from './schemas';
+
 /**
- * Environment variable validation.
+ * Environment variable validation via zod.
  * Validates all required env vars at startup so the app fails fast
  * with a clear error instead of blowing up deep in the call stack.
  */
 
-interface EnvConfig {
-  /** Clerk publishable key for client-side auth. */
-  clerkPublishableKey: string;
-  /** Clerk secret key for server-side auth. */
-  clerkSecretKey: string;
-  /** Database connection URL. */
-  databaseUrl: string;
-  /** Current Node environment. */
-  nodeEnv: 'development' | 'production' | 'test';
-}
+const _EnvConfigSchema = EnvSchema.transform((env) => ({
+  clerkPublishableKey: env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
+  clerkSecretKey: env.CLERK_SECRET_KEY,
+  databaseUrl: env.DATABASE_URL,
+  nodeEnv: env.NODE_ENV,
+}));
 
-function getRequiredEnv(key: string): string {
-  const value = process.env[key];
-  if (!value) {
-    throw new Error(
-      `Missing required environment variable: ${key}. ` +
-        `Check your .env.local file or deployment environment.`,
-    );
-  }
-  return value;
-}
-
-function getNodeEnv(): EnvConfig['nodeEnv'] {
-  const raw = process.env['NODE_ENV'] ?? 'development';
-  if (raw === 'production' || raw === 'test') return raw;
-  return 'development';
-}
+export type EnvConfig = z.infer<typeof _EnvConfigSchema>;
 
 /**
  * Validated, typed environment configuration.
@@ -39,12 +24,18 @@ function getNodeEnv(): EnvConfig['nodeEnv'] {
  * @throws {Error} if any required environment variable is missing.
  */
 export function getEnvConfig(): EnvConfig {
-  return {
-    clerkPublishableKey: getRequiredEnv('NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY'),
-    clerkSecretKey: getRequiredEnv('CLERK_SECRET_KEY'),
-    databaseUrl: getRequiredEnv('DATABASE_URL'),
-    nodeEnv: getNodeEnv(),
-  };
+  const result = _EnvConfigSchema.safeParse(process.env);
+
+  if (!result.success) {
+    const issues = result.error.issues
+      .map((i) => `  - ${i.path.join('.')}: ${i.message}`)
+      .join('\n');
+    throw new Error(
+      `Missing or invalid environment variables:\n${issues}\n\nCheck your .env.local file or deployment environment.`,
+    );
+  }
+
+  return result.data;
 }
 
 /**

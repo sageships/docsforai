@@ -4,29 +4,30 @@ import { after, NextResponse, type NextRequest } from 'next/server';
 import { syncClerkUser } from '@/lib/clerk-sync';
 import { crawlDocs } from '@/lib/crawler';
 import { generateLlmsTxt } from '@/lib/llmstxt-generator';
+import logger from '@/lib/logger';
 import prisma from '@/lib/prisma';
 import { generateRecommendations } from '@/lib/recommendations';
+import { ScanRequestSchema } from '@/lib/schemas';
 import { scoreDocs } from '@/lib/scorer';
 import { isPublicUrl } from '@/lib/url-validator';
 
 // TODO: Add rate limiting before high-traffic production launch.
 // Recommended: Upstash Redis + @upstash/ratelimit for per-IP sliding window.
 
-interface ScanRequestBody {
-  url: string;
-}
-
 /**
  * Runs the full crawl → score → recommend → generate pipeline for a scan.
  * Updates scan status at each stage so the polling UI reflects real progress.
  */
 async function runScanPipeline(scanId: string, normalizedUrl: string): Promise<void> {
+  const log = logger.child({ scanId, url: normalizedUrl });
   try {
     // 1. Crawl
+    log.info('Starting crawl');
     await prisma.scan.update({ where: { id: scanId }, data: { status: 'crawling' } });
     const crawlResult = await crawlDocs(normalizedUrl);
 
     // 2. Score
+    log.info({ pageCount: crawlResult.pages.length }, 'Crawl complete, scoring');
     await prisma.scan.update({ where: { id: scanId }, data: { status: 'scoring' } });
     const scoreResult = scoreDocs(crawlResult);
 
@@ -70,6 +71,7 @@ async function runScanPipeline(scanId: string, normalizedUrl: string): Promise<v
     });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error during scan';
+    log.error({ err }, 'Scan pipeline failed');
 
     // Mark scan as failed
     try {
@@ -81,8 +83,8 @@ async function runScanPipeline(scanId: string, normalizedUrl: string): Promise<v
           metadata: { errorMessage: message },
         },
       });
-    } catch {
-      // Ignore secondary DB error
+    } catch (dbErr) {
+      log.error({ err: dbErr }, 'Failed to mark scan as failed in DB');
     }
   }
 }
@@ -102,20 +104,20 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   // ── Parse & validate body ──────────────────────────────────────────────────
-  let body: ScanRequestBody;
+  let rawBody: unknown;
   try {
-    body = (await request.json()) as ScanRequestBody;
+    rawBody = await request.json();
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { url } = body;
-
-  if (!url || typeof url !== 'string') {
-    return NextResponse.json({ error: 'url is required' }, { status: 400 });
+  const parsed = ScanRequestSchema.safeParse(rawBody);
+  if (!parsed.success) {
+    const message = parsed.error.issues[0]?.message ?? 'Invalid request body';
+    return NextResponse.json({ error: message }, { status: 400 });
   }
 
-  const normalizedUrl = url.trim();
+  const normalizedUrl = parsed.data.url.trim();
 
   if (!isPublicUrl(normalizedUrl)) {
     return NextResponse.json(

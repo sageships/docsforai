@@ -1,7 +1,9 @@
 'use client';
 
+import { groupBy } from 'lodash-es';
 import { useState } from 'react';
 
+import { cn } from '@/lib/utils';
 import type { Recommendation } from '@/types';
 
 interface RecommendationsProps {
@@ -43,11 +45,12 @@ function RecommendationCard({ rec, done, onToggle }: RecommendationCardProps) {
 
   return (
     <div
-      className={`rounded-xl border p-4 transition-all duration-200 ${
+      className={cn(
+        'rounded-xl border p-4 transition-all duration-200',
         done
           ? 'border-gray-700 bg-gray-900/40 opacity-60'
-          : 'border-gray-700 bg-gray-900 hover:border-gray-600'
-      }`}
+          : 'border-gray-700 bg-gray-900 hover:border-gray-600',
+      )}
     >
       <div className="flex items-start gap-3">
         <button
@@ -85,7 +88,10 @@ function RecommendationCard({ rec, done, onToggle }: RecommendationCardProps) {
           </div>
 
           <h4
-            className={`font-semibold mb-1 ${done ? 'line-through text-gray-500' : 'text-gray-100'}`}
+            className={cn(
+              'font-semibold mb-1',
+              done ? 'line-through text-gray-500' : 'text-gray-100',
+            )}
           >
             {rec.title}
           </h4>
@@ -136,10 +142,11 @@ export default function Recommendations({ recommendations }: RecommendationsProp
     (a, b) => priorityConfig[a.priority].order - priorityConfig[b.priority].order,
   );
 
+  const groupedRaw = groupBy(sorted, 'priority');
   const grouped = {
-    high: sorted.filter((r) => r.priority === 'high'),
-    medium: sorted.filter((r) => r.priority === 'medium'),
-    low: sorted.filter((r) => r.priority === 'low'),
+    high: groupedRaw['high'] ?? [],
+    medium: groupedRaw['medium'] ?? [],
+    low: groupedRaw['low'] ?? [],
   };
 
   const doneCount = doneIds.size;

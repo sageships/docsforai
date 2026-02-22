@@ -1,7 +1,9 @@
 'use client';
 
+import { formatDuration, intervalToDuration } from 'date-fns';
 import { useEffect, useState } from 'react';
 
+import { cn } from '@/lib/utils';
 import type { ScanStatus } from '@/types';
 
 interface ScanProgressProps {
@@ -54,9 +56,9 @@ export default function ScanProgress({
 
   useEffect(() => {
     if (!startedAt) return;
-    const start = new Date(startedAt).getTime();
+    const start = new Date(startedAt);
     const timer = setInterval(() => {
-      setElapsed(Math.floor((Date.now() - start) / 1000));
+      setElapsed(Math.floor((Date.now() - start.getTime()) / 1000));
     }, 1000);
     return () => clearInterval(timer);
   }, [startedAt]);
@@ -74,7 +76,8 @@ export default function ScanProgress({
 
   const formatElapsed = (s: number): string => {
     if (s < 60) return `${s}s`;
-    return `${Math.floor(s / 60)}m ${s % 60}s`;
+    const duration = intervalToDuration({ start: 0, end: s * 1000 });
+    return formatDuration(duration, { format: ['minutes', 'seconds'], zero: false });
   };
 
   const estimatedTotal = 60;
@@ -128,13 +131,12 @@ export default function ScanProgress({
           return (
             <div
               key={step.id}
-              className={`flex items-start gap-3 p-3 rounded-lg border transition-all duration-300 ${
-                isActive
-                  ? 'border-indigo-500/50 bg-indigo-500/10'
-                  : isDone
-                    ? 'border-green-500/30 bg-green-500/5'
-                    : 'border-gray-800 bg-gray-900/50 opacity-40'
-              }`}
+              className={cn(
+                'flex items-start gap-3 p-3 rounded-lg border transition-all duration-300',
+                isActive && 'border-indigo-500/50 bg-indigo-500/10',
+                isDone && !isActive && 'border-green-500/30 bg-green-500/5',
+                !isActive && !isDone && 'border-gray-800 bg-gray-900/50 opacity-40',
+              )}
             >
               <div className="flex-shrink-0 mt-0.5">
                 {isDone && !isActive ? (
@@ -161,7 +163,12 @@ export default function ScanProgress({
               </div>
               <div>
                 <p
-                  className={`text-sm font-medium ${isActive ? 'text-indigo-300' : isDone ? 'text-green-300' : 'text-gray-500'}`}
+                  className={cn(
+                    'text-sm font-medium',
+                    isActive && 'text-indigo-300',
+                    isDone && !isActive && 'text-green-300',
+                    !isActive && !isDone && 'text-gray-500',
+                  )}
                 >
                   {step.label}
                 </p>

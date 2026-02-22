@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { toast } from 'sonner';
 
 interface LlmsTxtPreviewProps {
   llmsTxt: string;
@@ -21,8 +22,9 @@ export default function LlmsTxtPreview({ llmsTxt, llmsFullTxt }: LlmsTxtPreviewP
       await navigator.clipboard.writeText(content);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+      toast.success(`${filename} copied to clipboard!`);
     } catch {
-      // fallback
+      // Fallback for browsers without clipboard API
       const el = document.createElement('textarea');
       el.value = content;
       document.body.appendChild(el);
@@ -31,6 +33,7 @@ export default function LlmsTxtPreview({ llmsTxt, llmsFullTxt }: LlmsTxtPreviewP
       document.body.removeChild(el);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+      toast.success(`${filename} copied to clipboard!`);
     }
   };
 

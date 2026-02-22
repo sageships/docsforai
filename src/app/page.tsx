@@ -1,6 +1,7 @@
 'use client';
 
 import { SignedIn, SignedOut, UserButton } from '@clerk/nextjs';
+import { getYear } from 'date-fns';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -350,7 +351,7 @@ export default function HomePage() {
               D
             </div>
             <span className="font-semibold">DocsForAI</span>
-            <span className="text-gray-600 text-sm ml-2">© {new Date().getFullYear()}</span>
+            <span className="text-gray-600 text-sm ml-2">© {getYear(new Date())}</span>
           </div>
           <div className="flex items-center gap-8 text-sm text-gray-500">
             <a

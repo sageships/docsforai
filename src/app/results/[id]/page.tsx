@@ -1,8 +1,10 @@
 'use client';
 
+import { format } from 'date-fns';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 
 import LlmsTxtPreview from '@/components/LlmsTxtPreview';
 import Recommendations from '@/components/Recommendations';
@@ -65,8 +67,9 @@ export default function ResultsPage() {
       await navigator.clipboard.writeText(url);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+      toast.success('Link copied to clipboard!');
     } catch {
-      // silent
+      toast.error('Failed to copy link');
     }
   };
 
@@ -96,13 +99,7 @@ export default function ResultsPage() {
   if (!scan) return null;
 
   const isProcessing = scan.status !== 'completed' && scan.status !== 'failed';
-  const scanDate = new Date(scan.createdAt).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  const scanDate = format(new Date(scan.createdAt), 'MMMM d, yyyy, hh:mm a');
 
   // Convert ScoreResult → ScoreBreakdown[] for the ScoreBreakdown component
   const scoreBreakdown = scan.scores ? scoreResultToBreakdown(scan.scores) : null;

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { toast } from 'sonner';
 
 interface ScoreBadgeProps {
   score: number;
@@ -48,6 +49,7 @@ export default function ScoreBadge({ score, scanId }: ScoreBadgeProps) {
     }
     setCopiedKey(key);
     setTimeout(() => setCopiedKey(null), 2000);
+    toast.success(`${key === 'markdown' ? 'Markdown' : 'HTML'} badge code copied!`);
   };
 
   return (
