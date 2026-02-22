@@ -3,8 +3,8 @@
 import { formatDuration, intervalToDuration } from 'date-fns';
 import { useEffect, useState } from 'react';
 
+import { SCAN_STATUS, type ScanStatus } from '@/lib/constants';
 import { cn } from '@/lib/utils';
-import type { ScanStatus } from '@/types';
 
 interface ScanProgressProps {
   status: ScanStatus;
@@ -21,28 +21,28 @@ interface Step {
 
 const steps: Step[] = [
   {
-    id: 'crawling',
+    id: SCAN_STATUS.CRAWLING,
     label: 'Crawling pages',
     description: 'Discovering and fetching documentation pages...',
   },
   {
-    id: 'scoring',
+    id: SCAN_STATUS.SCORING,
     label: 'Analyzing & scoring',
     description: 'Evaluating structure, code quality, and AI-readiness...',
   },
   {
-    id: 'completed',
+    id: SCAN_STATUS.COMPLETED,
     label: 'Generating recommendations',
     description: 'Creating actionable improvement suggestions...',
   },
 ];
 
 const statusOrder: Record<ScanStatus, number> = {
-  pending: -1,
-  crawling: 0,
-  scoring: 1,
-  completed: 2,
-  failed: 3,
+  [SCAN_STATUS.PENDING]: -1,
+  [SCAN_STATUS.CRAWLING]: 0,
+  [SCAN_STATUS.SCORING]: 1,
+  [SCAN_STATUS.COMPLETED]: 2,
+  [SCAN_STATUS.FAILED]: 3,
 };
 
 export default function ScanProgress({
@@ -72,7 +72,13 @@ export default function ScanProgress({
 
   const currentStepIdx = statusOrder[status] ?? 0;
   const progressPct =
-    status === 'completed' ? 100 : status === 'scoring' ? 66 : status === 'crawling' ? 33 : 10;
+    status === SCAN_STATUS.COMPLETED
+      ? 100
+      : status === SCAN_STATUS.SCORING
+        ? 66
+        : status === SCAN_STATUS.CRAWLING
+          ? 33
+          : 10;
 
   const formatElapsed = (s: number): string => {
     if (s < 60) return `${s}s`;
@@ -96,10 +102,10 @@ export default function ScanProgress({
         <div className="text-center">
           <h3 className="text-lg font-semibold text-gray-100">Analyzing your docs{dots}</h3>
           <p className="text-sm text-gray-400 mt-1">
-            {status === 'crawling' &&
+            {status === SCAN_STATUS.CRAWLING &&
               `${pagesCrawled}${totalPages ? `/${totalPages}` : ''} pages crawled`}
-            {status === 'scoring' && 'Running AI analysis'}
-            {status === 'pending' && 'Initializing scan'}
+            {status === SCAN_STATUS.SCORING && 'Running AI analysis'}
+            {status === SCAN_STATUS.PENDING && 'Initializing scan'}
           </p>
         </div>
       </div>
@@ -126,7 +132,7 @@ export default function ScanProgress({
       <div className="space-y-3">
         {steps.map((step, i) => {
           const isActive = i === currentStepIdx;
-          const isDone = i < currentStepIdx || status === 'completed';
+          const isDone = i < currentStepIdx || status === SCAN_STATUS.COMPLETED;
 
           return (
             <div
@@ -179,7 +185,7 @@ export default function ScanProgress({
         })}
       </div>
 
-      {status === 'crawling' && totalPages && totalPages > 0 && (
+      {status === SCAN_STATUS.CRAWLING && totalPages && totalPages > 0 && (
         <div className="mt-4 text-center text-xs text-gray-500">
           {pagesCrawled} of {totalPages} pages processed
         </div>

@@ -1,6 +1,8 @@
+import { SCORE_CATEGORIES, type ScanStatus, type Priority } from '@/lib/constants';
 import type { ScoreResult } from '@/lib/scorer';
 
-export type ScanStatus = 'pending' | 'crawling' | 'scoring' | 'completed' | 'failed';
+// Re-export so consumers can import ScanStatus from '@/types' as before.
+export type { ScanStatus, Priority };
 
 /**
  * ScoreBreakdown is the per-category view used by the ScoreBreakdown UI component.
@@ -15,7 +17,7 @@ export interface ScoreBreakdown {
 
 export interface Recommendation {
   category: string;
-  priority: 'high' | 'medium' | 'low';
+  priority: Priority;
   title: string;
   description: string;
   example?: string;
@@ -52,7 +54,7 @@ export interface Scan {
     };
     errors: Array<{ url: string; error: string }>;
   } | null;
-  /** Error message if status === 'failed'. */
+  /** Error message if status === SCAN_STATUS.FAILED. */
   errorMessage: string | null;
   createdAt: string;
   updatedAt: string;
@@ -61,15 +63,13 @@ export interface Scan {
 /**
  * Converts a ScoreResult (from the scorer) into a ScoreBreakdown array
  * for display in the ScoreBreakdown UI component.
+ * Category labels and order come from SCORE_CATEGORIES — single source of truth.
  */
 export function scoreResultToBreakdown(scores: ScoreResult): ScoreBreakdown[] {
-  return [
-    { category: 'Structure', ...scores.structure },
-    { category: 'Code Quality', ...scores.code },
-    { category: 'Query-ability', ...scores.query },
-    { category: 'AI-SEO', ...scores.seoForAi },
-    { category: 'Freshness', ...scores.freshness },
-  ];
+  return Object.values(SCORE_CATEGORIES).map(({ key, label }) => ({
+    category: label,
+    ...scores[key],
+  }));
 }
 
 /** Lightweight scan summary returned by GET /api/scans (dashboard list). */

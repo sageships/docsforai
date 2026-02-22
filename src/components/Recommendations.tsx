@@ -3,6 +3,7 @@
 import { groupBy } from 'lodash-es';
 import { useState } from 'react';
 
+import { PRIORITY, type Priority } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 import type { Recommendation } from '@/types';
 
@@ -10,22 +11,28 @@ interface RecommendationsProps {
   recommendations: Recommendation[];
 }
 
-const priorityConfig = {
-  high: {
+const priorityConfig: Record<Priority, { label: string; badgeClass: string; order: number }> = {
+  [PRIORITY.HIGH]: {
     label: 'High Priority',
     badgeClass: 'bg-red-500/20 text-red-400 border border-red-500/30',
     order: 0,
   },
-  medium: {
+  [PRIORITY.MEDIUM]: {
     label: 'Medium Priority',
     badgeClass: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30',
     order: 1,
   },
-  low: {
+  [PRIORITY.LOW]: {
     label: 'Low Priority',
     badgeClass: 'bg-blue-500/20 text-blue-400 border border-blue-500/30',
     order: 2,
   },
+};
+
+const priorityTextClass: Record<Priority, string> = {
+  [PRIORITY.HIGH]: 'text-red-400',
+  [PRIORITY.MEDIUM]: 'text-yellow-400',
+  [PRIORITY.LOW]: 'text-blue-400',
 };
 
 /** Stable ID derived from category + title so "done" state survives re-sorts. */
@@ -143,10 +150,10 @@ export default function Recommendations({ recommendations }: RecommendationsProp
   );
 
   const groupedRaw = groupBy(sorted, 'priority');
-  const grouped = {
-    high: groupedRaw['high'] ?? [],
-    medium: groupedRaw['medium'] ?? [],
-    low: groupedRaw['low'] ?? [],
+  const grouped: Record<Priority, Recommendation[]> = {
+    [PRIORITY.HIGH]: groupedRaw[PRIORITY.HIGH] ?? [],
+    [PRIORITY.MEDIUM]: groupedRaw[PRIORITY.MEDIUM] ?? [],
+    [PRIORITY.LOW]: groupedRaw[PRIORITY.LOW] ?? [],
   };
 
   const doneCount = doneIds.size;
@@ -171,7 +178,7 @@ export default function Recommendations({ recommendations }: RecommendationsProp
       )}
 
       <div className="space-y-6">
-        {(['high', 'medium', 'low'] as const).map((priority) => {
+        {([PRIORITY.HIGH, PRIORITY.MEDIUM, PRIORITY.LOW] as const).map((priority) => {
           const group = grouped[priority];
           if (group.length === 0) return null;
           const config = priorityConfig[priority];
@@ -179,13 +186,7 @@ export default function Recommendations({ recommendations }: RecommendationsProp
           return (
             <div key={priority}>
               <h3
-                className={`text-sm font-semibold uppercase tracking-wider mb-3 ${
-                  priority === 'high'
-                    ? 'text-red-400'
-                    : priority === 'medium'
-                      ? 'text-yellow-400'
-                      : 'text-blue-400'
-                }`}
+                className={`text-sm font-semibold uppercase tracking-wider mb-3 ${priorityTextClass[priority]}`}
               >
                 {config.label} ({group.length})
               </h3>

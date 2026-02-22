@@ -2,6 +2,7 @@ import type { Prisma } from '@prisma/client';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
+import { SCAN_STATUS } from '@/lib/constants';
 import { crawlDocs, type CrawlResult } from '@/lib/crawler';
 import { safeJsonParse } from '@/lib/json-utils';
 import { generateLlmsTxt } from '@/lib/llmstxt-generator';
@@ -58,7 +59,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json({ error: 'Scan not found' }, { status: 404 });
     }
 
-    if (scan.status !== 'completed') {
+    if (scan.status !== SCAN_STATUS.COMPLETED) {
       return NextResponse.json(
         { error: `Scan is not completed yet (status: ${scan.status})` },
         { status: 409 },

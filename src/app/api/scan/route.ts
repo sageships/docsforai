@@ -2,6 +2,7 @@ import { auth } from '@clerk/nextjs/server';
 import { after, NextResponse, type NextRequest } from 'next/server';
 
 import { syncClerkUser } from '@/lib/clerk-sync';
+import { SCAN_STATUS } from '@/lib/constants';
 import { crawlDocs } from '@/lib/crawler';
 import { generateLlmsTxt } from '@/lib/llmstxt-generator';
 import logger from '@/lib/logger';
@@ -23,12 +24,12 @@ async function runScanPipeline(scanId: string, normalizedUrl: string): Promise<v
   try {
     // 1. Crawl
     log.info('Starting crawl');
-    await prisma.scan.update({ where: { id: scanId }, data: { status: 'crawling' } });
+    await prisma.scan.update({ where: { id: scanId }, data: { status: SCAN_STATUS.CRAWLING } });
     const crawlResult = await crawlDocs(normalizedUrl);
 
     // 2. Score
     log.info({ pageCount: crawlResult.pages.length }, 'Crawl complete, scoring');
-    await prisma.scan.update({ where: { id: scanId }, data: { status: 'scoring' } });
+    await prisma.scan.update({ where: { id: scanId }, data: { status: SCAN_STATUS.SCORING } });
     const scoreResult = scoreDocs(crawlResult);
 
     // 3. Recommendations
@@ -41,7 +42,7 @@ async function runScanPipeline(scanId: string, normalizedUrl: string): Promise<v
     await prisma.scan.update({
       where: { id: scanId },
       data: {
-        status: 'completed',
+        status: SCAN_STATUS.COMPLETED,
         completedAt: new Date(),
         overallScore: scoreResult.total,
         structureScore: scoreResult.structure.score,
@@ -78,7 +79,7 @@ async function runScanPipeline(scanId: string, normalizedUrl: string): Promise<v
       await prisma.scan.update({
         where: { id: scanId },
         data: {
-          status: 'failed',
+          status: SCAN_STATUS.FAILED,
           completedAt: new Date(),
           metadata: { errorMessage: message },
         },
@@ -132,7 +133,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     scan = await prisma.scan.create({
       data: {
         url: normalizedUrl,
-        status: 'pending',
+        status: SCAN_STATUS.PENDING,
         ...(dbUserId ? { userId: dbUserId } : {}),
       },
       select: { id: true },

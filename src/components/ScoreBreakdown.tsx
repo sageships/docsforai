@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 
+import { SCORE_CATEGORIES, SCORE_COLORS } from '@/lib/constants';
 import { cn } from '@/lib/utils';
 import type { ScoreBreakdown } from '@/types';
 
@@ -9,27 +10,10 @@ interface ScoreBreakdownProps {
   breakdown: ScoreBreakdown[];
 }
 
-const categoryIcons: Record<string, string> = {
-  Structure: '🏗️',
-  'Code Quality': '💻',
-  'Query-ability': '🔍',
-  'AI-SEO': '🤖',
-  Freshness: '⚡',
-};
-
-function getBarColor(score: number, max: number): string {
-  const pct = (score / max) * 100;
-  if (pct < 40) return 'bg-red-500';
-  if (pct <= 70) return 'bg-yellow-500';
-  return 'bg-green-500';
-}
-
-function getTextColor(score: number, max: number): string {
-  const pct = (score / max) * 100;
-  if (pct < 40) return 'text-red-400';
-  if (pct <= 70) return 'text-yellow-400';
-  return 'text-green-400';
-}
+/** Lookup map from display label → icon, derived from the canonical SCORE_CATEGORIES. */
+const categoryIconMap: Record<string, string> = Object.fromEntries(
+  Object.values(SCORE_CATEGORIES).map(({ label, icon }) => [label, icon]),
+);
 
 interface CategoryRowProps {
   item: ScoreBreakdown;
@@ -38,7 +22,7 @@ interface CategoryRowProps {
 function CategoryRow({ item }: CategoryRowProps) {
   const [expanded, setExpanded] = useState(false);
   const pct = Math.round((item.score / item.maxScore) * 100);
-  const icon = categoryIcons[item.category] ?? '📊';
+  const icon = categoryIconMap[item.category] ?? '📊';
 
   return (
     <div className="rounded-xl bg-gray-900 border border-gray-800 overflow-hidden">
@@ -54,7 +38,7 @@ function CategoryRow({ item }: CategoryRowProps) {
             <span
               className={cn(
                 'text-sm font-bold ml-2 flex-shrink-0',
-                getTextColor(item.score, item.maxScore),
+                SCORE_COLORS.textClass(item.score, item.maxScore),
               )}
             >
               {item.score}/{item.maxScore}
@@ -65,7 +49,7 @@ function CategoryRow({ item }: CategoryRowProps) {
             <div
               className={cn(
                 'h-2 rounded-full transition-all duration-700 ease-out',
-                getBarColor(item.score, item.maxScore),
+                SCORE_COLORS.barClass(item.score, item.maxScore),
               )}
               style={{ width: `${pct}%` }}
             />

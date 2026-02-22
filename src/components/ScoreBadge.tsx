@@ -3,29 +3,19 @@
 import { useState } from 'react';
 import { toast } from 'sonner';
 
+import { SCORE_COLORS } from '@/lib/constants';
+
 interface ScoreBadgeProps {
   score: number;
   scanId: string;
   docsUrl?: string;
 }
 
-function getScoreColor(score: number): string {
-  if (score < 40) return 'critical';
-  if (score <= 70) return 'yellow';
-  return 'brightgreen';
-}
-
-function getScoreLabel(score: number): string {
-  if (score < 40) return 'needs work';
-  if (score <= 70) return 'moderate';
-  return 'AI-ready';
-}
-
 export default function ScoreBadge({ score, scanId }: ScoreBadgeProps) {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
-  const color = getScoreColor(score);
-  const label = getScoreLabel(score);
+  const color = SCORE_COLORS.badgeColor(score);
+  const label = SCORE_COLORS.badgeLabel(score);
   const resultsUrl =
     typeof window !== 'undefined'
       ? `${window.location.origin}/results/${scanId}`

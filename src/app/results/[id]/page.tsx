@@ -12,6 +12,7 @@ import ScanProgress from '@/components/ScanProgress';
 import ScoreBadge from '@/components/ScoreBadge';
 import ScoreBreakdown from '@/components/ScoreBreakdown';
 import ScoreCard from '@/components/ScoreCard';
+import { API_ROUTES, POLL_INTERVAL_MS, SCAN_STATUS } from '@/lib/constants';
 import type { Scan } from '@/types';
 import { scoreResultToBreakdown } from '@/types';
 
@@ -32,7 +33,7 @@ export default function ResultsPage() {
 
     const fetchScan = async () => {
       try {
-        const res = await fetch(`/api/scan/${id}`);
+        const res = await fetch(API_ROUTES.SCAN_BY_ID(id));
         if (!res.ok) {
           const data = (await res.json().catch(() => ({}))) as { error?: string };
           throw new Error(data.error ?? 'Failed to load scan results');
@@ -43,8 +44,8 @@ export default function ResultsPage() {
         setScan(data);
         setLoading(false);
 
-        if (data.status !== 'completed' && data.status !== 'failed') {
-          pollTimer = setTimeout(fetchScan, 2000);
+        if (data.status !== SCAN_STATUS.COMPLETED && data.status !== SCAN_STATUS.FAILED) {
+          pollTimer = setTimeout(fetchScan, POLL_INTERVAL_MS);
         }
       } catch (err) {
         if (!active) return;
@@ -98,7 +99,7 @@ export default function ResultsPage() {
 
   if (!scan) return null;
 
-  const isProcessing = scan.status !== 'completed' && scan.status !== 'failed';
+  const isProcessing = scan.status !== SCAN_STATUS.COMPLETED && scan.status !== SCAN_STATUS.FAILED;
   const scanDate = format(new Date(scan.createdAt), 'MMMM d, yyyy, hh:mm a');
 
   // Convert ScoreResult → ScoreBreakdown[] for the ScoreBreakdown component
@@ -173,7 +174,7 @@ export default function ResultsPage() {
         )}
 
         {/* Failed state */}
-        {scan.status === 'failed' && (
+        {scan.status === SCAN_STATUS.FAILED && (
           <div className="mb-12 rounded-xl border border-red-500/30 bg-red-500/10 p-6 text-center">
             <p className="text-red-400 font-medium">Scan failed</p>
             {scan.errorMessage && <p className="text-sm text-gray-400 mt-1">{scan.errorMessage}</p>}
@@ -181,7 +182,7 @@ export default function ResultsPage() {
         )}
 
         {/* Completed results */}
-        {scan.status === 'completed' && scan.totalScore !== null && (
+        {scan.status === SCAN_STATUS.COMPLETED && scan.totalScore !== null && (
           <>
             {/* Score Card */}
             <div className="flex justify-center mb-16">

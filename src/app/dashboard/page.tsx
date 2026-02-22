@@ -5,22 +5,21 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
+import { API_ROUTES, SCAN_STATUS, SCORE_COLORS } from '@/lib/constants';
 import type { ScanSummary } from '@/types';
 
 function getScoreColor(score: number | null): string {
   if (score === null) return 'text-gray-500';
-  if (score < 40) return 'text-red-400';
-  if (score <= 70) return 'text-yellow-400';
-  return 'text-green-400';
+  return SCORE_COLORS.textClass(score);
 }
 
 function getStatusBadge(status: ScanSummary['status']) {
   const map: Record<ScanSummary['status'], { label: string; class: string }> = {
-    pending: { label: 'Pending', class: 'bg-gray-700 text-gray-300' },
-    crawling: { label: 'Crawling', class: 'bg-blue-500/20 text-blue-400' },
-    scoring: { label: 'Scoring', class: 'bg-indigo-500/20 text-indigo-400' },
-    completed: { label: 'Completed', class: 'bg-green-500/20 text-green-400' },
-    failed: { label: 'Failed', class: 'bg-red-500/20 text-red-400' },
+    [SCAN_STATUS.PENDING]: { label: 'Pending', class: 'bg-gray-700 text-gray-300' },
+    [SCAN_STATUS.CRAWLING]: { label: 'Crawling', class: 'bg-blue-500/20 text-blue-400' },
+    [SCAN_STATUS.SCORING]: { label: 'Scoring', class: 'bg-indigo-500/20 text-indigo-400' },
+    [SCAN_STATUS.COMPLETED]: { label: 'Completed', class: 'bg-green-500/20 text-green-400' },
+    [SCAN_STATUS.FAILED]: { label: 'Failed', class: 'bg-red-500/20 text-red-400' },
   };
   const cfg = map[status];
   return (
@@ -41,7 +40,7 @@ export default function DashboardPage() {
   const [scanning, setScanning] = useState(false);
 
   useEffect(() => {
-    fetch('/api/scans')
+    fetch(API_ROUTES.SCANS)
       .then((r) => {
         if (!r.ok) throw new Error('Failed to load scans');
         return r.json() as Promise<ScanSummary[]>;
@@ -62,7 +61,7 @@ export default function DashboardPage() {
 
     setScanning(true);
     try {
-      const res = await fetch('/api/scan', {
+      const res = await fetch(API_ROUTES.SCAN, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url: newUrl.trim() }),
@@ -77,7 +76,9 @@ export default function DashboardPage() {
   };
 
   // Stats — use totalScore (matches API field name)
-  const completedScans = scans.filter((s) => s.status === 'completed' && s.totalScore !== null);
+  const completedScans = scans.filter(
+    (s) => s.status === SCAN_STATUS.COMPLETED && s.totalScore !== null,
+  );
   const totalScans = scans.length;
   const avgScore = completedScans.length
     ? Math.round(

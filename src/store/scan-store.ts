@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-import { POLL_INTERVAL_MS, MAX_POLL_ATTEMPTS } from '@/lib/constants';
+import { API_ROUTES, POLL_INTERVAL_MS, MAX_POLL_ATTEMPTS, SCAN_STATUS } from '@/lib/constants';
 import type { Scan } from '@/types';
 
 interface ScanState {
@@ -16,7 +16,7 @@ async function pollUntilComplete(id: string, onUpdate: (scan: Scan) => void): Pr
   let attempts = 0;
 
   while (attempts < MAX_POLL_ATTEMPTS) {
-    const res = await fetch(`/api/scan/${id}`);
+    const res = await fetch(API_ROUTES.SCAN_BY_ID(id));
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       throw new Error((data as { error?: string }).error ?? `Failed to fetch scan: ${res.status}`);
@@ -25,7 +25,7 @@ async function pollUntilComplete(id: string, onUpdate: (scan: Scan) => void): Pr
     const scan = (await res.json()) as Scan;
     onUpdate(scan);
 
-    if (scan.status === 'completed' || scan.status === 'failed') {
+    if (scan.status === SCAN_STATUS.COMPLETED || scan.status === SCAN_STATUS.FAILED) {
       return scan;
     }
 
@@ -45,7 +45,7 @@ export const useScanStore = create<ScanState>((set) => ({
     set({ isScanning: true, error: null, currentScan: null });
 
     try {
-      const res = await fetch('/api/scan', {
+      const res = await fetch(API_ROUTES.SCAN, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url }),
@@ -76,7 +76,7 @@ export const useScanStore = create<ScanState>((set) => ({
     set({ isScanning: true, error: null });
 
     try {
-      const res = await fetch(`/api/scan/${id}`);
+      const res = await fetch(API_ROUTES.SCAN_BY_ID(id));
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error(

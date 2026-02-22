@@ -2,21 +2,11 @@
 
 import { useEffect, useState } from 'react';
 
+import { SCORE_COLORS } from '@/lib/constants';
+
 interface ScoreCardProps {
   score: number;
   size?: 'sm' | 'md' | 'lg';
-}
-
-function getScoreColor(score: number): string {
-  if (score < 40) return '#ef4444'; // red-500
-  if (score <= 70) return '#eab308'; // yellow-500
-  return '#22c55e'; // green-500
-}
-
-function getScoreLabel(score: number): string {
-  if (score < 40) return 'Needs Work';
-  if (score <= 70) return 'Moderate';
-  return 'AI-Ready';
 }
 
 export default function ScoreCard({ score, size = 'lg' }: ScoreCardProps) {
@@ -31,7 +21,7 @@ export default function ScoreCard({ score, size = 'lg' }: ScoreCardProps) {
 
   const { radius, stroke, svgSize, fontSize } = dimensions[size];
   const circumference = 2 * Math.PI * radius;
-  const color = getScoreColor(score);
+  const color = SCORE_COLORS.hex(score);
 
   useEffect(() => {
     const duration = 1500;
@@ -104,7 +94,7 @@ export default function ScoreCard({ score, size = 'lg' }: ScoreCardProps) {
           AI-Readiness Score
         </p>
         <p className="text-sm font-semibold mt-0.5" style={{ color }}>
-          {getScoreLabel(score)}
+          {SCORE_COLORS.label(score)}
         </p>
       </div>
     </div>
