@@ -1,6 +1,8 @@
+import { auth } from '@clerk/nextjs/server';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
+import { syncClerkUser } from '@/lib/clerk-sync';
 import { crawlDocs } from '@/lib/crawler';
 import { generateLlmsTxt } from '@/lib/llmstxt-generator';
 import prisma from '@/lib/prisma';
@@ -26,6 +28,19 @@ function isValidUrl(value: string): boolean {
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  // ── Resolve authenticated user (optional) ──────────────────────────────────
+  const { userId: clerkUserId } = await auth();
+
+  let dbUserId: string | null = null;
+  if (clerkUserId) {
+    try {
+      const dbUser = await syncClerkUser(clerkUserId);
+      dbUserId = dbUser.id;
+    } catch {
+      // Non-fatal: proceed as anonymous scan if sync fails
+    }
+  }
+
   // ── Parse & validate body ──────────────────────────────────────────────────
   let body: ScanRequestBody;
   try {
@@ -53,6 +68,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       data: {
         url: normalizedUrl,
         status: 'pending',
+        ...(dbUserId ? { userId: dbUserId } : {}),
       },
       select: { id: true },
     });
