@@ -3,8 +3,10 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 
 import { crawlDocs, type CrawlResult } from '@/lib/crawler';
+import { safeJsonParse } from '@/lib/json-utils';
 import { generateLlmsTxt } from '@/lib/llmstxt-generator';
 import prisma from '@/lib/prisma';
+import { isPublicUrl } from '@/lib/url-validator';
 
 interface GenerateRequestBody {
   url?: string;
@@ -14,28 +16,6 @@ interface GenerateRequestBody {
 interface GenerateResponse {
   llmsTxt: string;
   llmsFullTxt: string;
-}
-
-function isValidUrl(value: string): boolean {
-  try {
-    const parsed = new URL(value);
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
-  } catch {
-    return false;
-  }
-}
-
-function safeJsonParse<T>(value: unknown): T | null {
-  if (value === null || value === undefined) return null;
-  if (typeof value === 'object') return value as T;
-  if (typeof value === 'string') {
-    try {
-      return JSON.parse(value) as T;
-    } catch {
-      return null;
-    }
-  }
-  return null;
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
@@ -76,9 +56,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
           url: true,
         },
       });
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Database error';
-      return NextResponse.json({ error: `Database error: ${message}` }, { status: 500 });
+    } catch {
+      return NextResponse.json({ error: 'Database error' }, { status: 500 });
     }
 
     if (!scan) {
@@ -92,12 +71,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    // Parse llmsFullTxt and crawlData from metadata
+    // Parse llmsFullTxt from metadata
     const meta = safeJsonParse<Record<string, unknown>>(scan.metadata);
     const llmsFullTxt = (meta?.llmsFullTxt as string | null) ?? null;
-    const crawlData = meta?.crawlData ?? null;
 
-    // If llms.txt was already generated and stored, return it directly
+    // If already generated, return directly
     if (scan.llmsTxt && llmsFullTxt) {
       const response: GenerateResponse = {
         llmsTxt: scan.llmsTxt,
@@ -106,43 +84,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       return NextResponse.json(response, { status: 200 });
     }
 
-    // Otherwise re-generate from crawl data (shouldn't happen normally)
-    const parsedCrawlData = safeJsonParse<Partial<CrawlResult>>(crawlData);
-    if (!parsedCrawlData) {
-      return NextResponse.json(
-        { error: 'Scan data is incomplete — please run a fresh scan' },
-        { status: 422 },
-      );
-    }
-
-    // Rebuild a minimal CrawlResult from stored meta + re-crawl pages
-    // Since we don't store full pages in crawlData (too large), do a fresh crawl
-    try {
-      const freshCrawl = await crawlDocs(scan.url);
-      const { llmsTxt: newLlmsTxt, llmsFullTxt: newLlmsFullTxt } = generateLlmsTxt(freshCrawl);
-
-      // Cache the result back to the scan (merge into existing metadata)
-      await prisma.scan
-        .update({
-          where: { id: scanId.trim() },
-          data: {
-            llmsTxt: newLlmsTxt,
-            metadata: {
-              ...(meta ?? {}),
-              llmsFullTxt: newLlmsFullTxt,
-            },
-          },
-        })
-        .catch(() => {
-          // Non-fatal — ignore cache update failure
-        });
-
-      const response: GenerateResponse = { llmsTxt: newLlmsTxt, llmsFullTxt: newLlmsFullTxt };
-      return NextResponse.json(response, { status: 200 });
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Crawl error';
-      return NextResponse.json({ error: `Failed to generate: ${message}` }, { status: 500 });
-    }
+    // Missing data — instruct user to re-run rather than silently re-crawling
+    return NextResponse.json(
+      {
+        error: 'llms.txt data is missing for this scan. Please run a fresh scan to regenerate it.',
+      },
+      { status: 422 },
+    );
   }
 
   // ── Path 2: Fresh crawl from URL ───────────────────────────────────────────
@@ -152,21 +100,20 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const normalizedUrl = url.trim();
 
-  if (!isValidUrl(normalizedUrl)) {
-    return NextResponse.json({ error: 'url must be a valid http or https URL' }, { status: 400 });
+  if (!isPublicUrl(normalizedUrl)) {
+    return NextResponse.json(
+      { error: 'url must be a valid, publicly-routable http or https URL' },
+      { status: 400 },
+    );
   }
 
   try {
-    const crawlResult = await crawlDocs(normalizedUrl);
+    const crawlResult: CrawlResult = await crawlDocs(normalizedUrl);
     const { llmsTxt, llmsFullTxt } = generateLlmsTxt(crawlResult);
 
     const response: GenerateResponse = { llmsTxt, llmsFullTxt };
     return NextResponse.json(response, { status: 200 });
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    return NextResponse.json(
-      { error: `Failed to crawl and generate llms.txt: ${message}` },
-      { status: 500 },
-    );
+  } catch {
+    return NextResponse.json({ error: 'Failed to crawl and generate llms.txt' }, { status: 500 });
   }
 }

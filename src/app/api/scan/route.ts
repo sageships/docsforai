@@ -1,6 +1,5 @@
 import { auth } from '@clerk/nextjs/server';
-import type { NextRequest } from 'next/server';
-import { NextResponse } from 'next/server';
+import { after, NextResponse, type NextRequest } from 'next/server';
 
 import { syncClerkUser } from '@/lib/clerk-sync';
 import { crawlDocs } from '@/lib/crawler';
@@ -8,22 +7,83 @@ import { generateLlmsTxt } from '@/lib/llmstxt-generator';
 import prisma from '@/lib/prisma';
 import { generateRecommendations } from '@/lib/recommendations';
 import { scoreDocs } from '@/lib/scorer';
+import { isPublicUrl } from '@/lib/url-validator';
 
-// TODO: Add rate limiting to this endpoint before production.
-// Recommended: use Upstash Redis + @upstash/ratelimit to enforce per-IP limits
-// (e.g., 5 scans/hour per IP). Without this, a single user can exhaust crawl
-// capacity and incur unbounded database writes.
+// TODO: Add rate limiting before high-traffic production launch.
+// Recommended: Upstash Redis + @upstash/ratelimit for per-IP sliding window.
 
 interface ScanRequestBody {
   url: string;
 }
 
-function isValidUrl(value: string): boolean {
+/**
+ * Runs the full crawl → score → recommend → generate pipeline for a scan.
+ * Updates scan status at each stage so the polling UI reflects real progress.
+ */
+async function runScanPipeline(scanId: string, normalizedUrl: string): Promise<void> {
   try {
-    const parsed = new URL(value);
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
-  } catch {
-    return false;
+    // 1. Crawl
+    await prisma.scan.update({ where: { id: scanId }, data: { status: 'crawling' } });
+    const crawlResult = await crawlDocs(normalizedUrl);
+
+    // 2. Score
+    await prisma.scan.update({ where: { id: scanId }, data: { status: 'scoring' } });
+    const scoreResult = scoreDocs(crawlResult);
+
+    // 3. Recommendations
+    const recommendations = generateRecommendations(scoreResult, crawlResult);
+
+    // 4. Generate llms.txt
+    const { llmsTxt, llmsFullTxt } = generateLlmsTxt(crawlResult);
+
+    // 5. Persist results
+    await prisma.scan.update({
+      where: { id: scanId },
+      data: {
+        status: 'completed',
+        completedAt: new Date(),
+        overallScore: scoreResult.total,
+        structureScore: scoreResult.structure.score,
+        codeScore: scoreResult.code.score,
+        queryScore: scoreResult.query.score,
+        seoScore: scoreResult.seoForAi.score,
+        freshnessScore: scoreResult.freshness.score,
+        recommendations: JSON.parse(JSON.stringify(recommendations)),
+        llmsTxt,
+        pagesCrawled: crawlResult.pages.length,
+        metadata: JSON.parse(
+          JSON.stringify({
+            llmsFullTxt,
+            scoreBreakdown: scoreResult,
+            crawlData: {
+              rootUrl: crawlResult.rootUrl,
+              hasLlmsTxt: crawlResult.hasLlmsTxt,
+              hasLlmsFullTxt: crawlResult.hasLlmsFullTxt,
+              hasSitemap: crawlResult.hasSitemap,
+              hasRssFeed: crawlResult.hasRssFeed,
+              docsStructure: crawlResult.docsStructure,
+              errors: crawlResult.errors,
+            },
+          }),
+        ),
+      },
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unknown error during scan';
+
+    // Mark scan as failed
+    try {
+      await prisma.scan.update({
+        where: { id: scanId },
+        data: {
+          status: 'failed',
+          completedAt: new Date(),
+          metadata: { errorMessage: message },
+        },
+      });
+    } catch {
+      // Ignore secondary DB error
+    }
   }
 }
 
@@ -57,8 +117,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const normalizedUrl = url.trim();
 
-  if (!isValidUrl(normalizedUrl)) {
-    return NextResponse.json({ error: 'url must be a valid http or https URL' }, { status: 400 });
+  if (!isPublicUrl(normalizedUrl)) {
+    return NextResponse.json(
+      { error: 'url must be a valid, publicly-routable http or https URL' },
+      { status: 400 },
+    );
   }
 
   // ── Create pending scan record ──────────────────────────────────────────────
@@ -72,83 +135,23 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       },
       select: { id: true },
     });
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Database error';
-    return NextResponse.json({ error: `Failed to create scan: ${message}` }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: 'Failed to create scan' }, { status: 500 });
   }
 
-  // ── Run pipeline ────────────────────────────────────────────────────────────
-  try {
-    // 1. Crawl
-    const crawlResult = await crawlDocs(normalizedUrl);
+  // ── Schedule pipeline to run after response is sent ────────────────────────
+  // `after()` runs the callback after the response is delivered, compatible
+  // with Vercel's waitUntil. The crawl pipeline runs independently in the
+  // background while the client immediately gets back the scanId to poll.
+  after(async () => {
+    await runScanPipeline(scan.id, normalizedUrl);
+  });
 
-    // 2. Score
-    const scoreResult = scoreDocs(crawlResult);
-
-    // 3. Recommendations
-    const recommendations = generateRecommendations(scoreResult, crawlResult);
-
-    // 4. Generate llms.txt
-    const { llmsTxt, llmsFullTxt } = generateLlmsTxt(crawlResult);
-
-    // 5. Persist results — store non-schema fields inside `metadata` Json
-    await prisma.scan.update({
-      where: { id: scan.id },
-      data: {
-        status: 'completed',
-        overallScore: scoreResult.total,
-        structureScore: scoreResult.structure.score,
-        codeScore: scoreResult.code.score,
-        queryScore: scoreResult.query.score,
-        seoScore: scoreResult.seoForAi.score,
-        freshnessScore: scoreResult.freshness.score,
-        recommendations: JSON.parse(JSON.stringify(recommendations)),
-        llmsTxt,
-        pagesCrawled: crawlResult.pages.length,
-        metadata: JSON.parse(
-          JSON.stringify({
-            llmsFullTxt,
-            scoreBreakdown: scoreResult,
-            crawlData: {
-              rootUrl: crawlResult.rootUrl,
-              hasLlmsTxt: crawlResult.hasLlmsTxt,
-              hasLlmsFullTxt: crawlResult.hasLlmsFullTxt,
-              hasSitemap: crawlResult.hasSitemap,
-              hasRssFeed: crawlResult.hasRssFeed,
-              docsStructure: crawlResult.docsStructure,
-              errors: crawlResult.errors,
-            },
-          }),
-        ),
-      },
-    });
-
-    return NextResponse.json(
-      {
-        scanId: scan.id,
-        redirectUrl: `/results/${scan.id}`,
-      },
-      { status: 201 },
-    );
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Unknown error during scan';
-
-    // Mark scan as failed — store error in metadata Json
-    try {
-      await prisma.scan.update({
-        where: { id: scan.id },
-        data: {
-          status: 'failed',
-          metadata: { errorMessage: message },
-        },
-      });
-    } catch {
-      // Ignore secondary DB error
-    }
-
-    return NextResponse.json(
-      { error: `Scan failed: ${message}`, scanId: scan.id },
-      { status: 500 },
-    );
-  }
+  return NextResponse.json(
+    {
+      scanId: scan.id,
+      redirectUrl: `/results/${scan.id}`,
+    },
+    { status: 201 },
+  );
 }

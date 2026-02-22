@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 
-import type { Scan } from '@/types';
+import type { ScanSummary } from '@/types';
 
 function getScoreColor(score: number | null): string {
   if (score === null) return 'text-gray-500';
@@ -13,8 +13,8 @@ function getScoreColor(score: number | null): string {
   return 'text-green-400';
 }
 
-function getStatusBadge(status: Scan['status']) {
-  const map: Record<Scan['status'], { label: string; class: string }> = {
+function getStatusBadge(status: ScanSummary['status']) {
+  const map: Record<ScanSummary['status'], { label: string; class: string }> = {
     pending: { label: 'Pending', class: 'bg-gray-700 text-gray-300' },
     crawling: { label: 'Crawling', class: 'bg-blue-500/20 text-blue-400' },
     scoring: { label: 'Scoring', class: 'bg-indigo-500/20 text-indigo-400' },
@@ -37,7 +37,7 @@ function formatDate(dateStr: string): string {
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [scans, setScans] = useState<Scan[]>([]);
+  const [scans, setScans] = useState<ScanSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [newUrl, setNewUrl] = useState('');
@@ -47,14 +47,14 @@ export default function DashboardPage() {
     fetch('/api/scans')
       .then((r) => {
         if (!r.ok) throw new Error('Failed to load scans');
-        return r.json();
+        return r.json() as Promise<ScanSummary[]>;
       })
-      .then((data: Scan[]) => {
+      .then((data) => {
         setScans(data);
         setLoading(false);
       })
-      .catch((err) => {
-        setError(err.message);
+      .catch((err: unknown) => {
+        setError(err instanceof Error ? err.message : 'Failed to load scans');
         setLoading(false);
       });
   }, []);
@@ -71,22 +71,24 @@ export default function DashboardPage() {
         body: JSON.stringify({ url: newUrl.trim() }),
       });
       if (!res.ok) throw new Error('Failed to start scan');
-      const scan: Scan = await res.json();
-      router.push(`/results/${scan.id}`);
+      const data = (await res.json()) as { scanId: string; redirectUrl: string };
+      router.push(`/results/${data.scanId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
       setScanning(false);
     }
   };
 
-  // Stats
-  const completedScans = scans.filter((s) => s.status === 'completed' && s.score !== null);
+  // Stats — use totalScore (matches API field name)
+  const completedScans = scans.filter((s) => s.status === 'completed' && s.totalScore !== null);
   const totalScans = scans.length;
   const avgScore = completedScans.length
-    ? Math.round(completedScans.reduce((sum, s) => sum + (s.score ?? 0), 0) / completedScans.length)
+    ? Math.round(
+        completedScans.reduce((sum, s) => sum + (s.totalScore ?? 0), 0) / completedScans.length,
+      )
     : null;
   const bestScore = completedScans.length
-    ? Math.max(...completedScans.map((s) => s.score ?? 0))
+    ? Math.max(...completedScans.map((s) => s.totalScore ?? 0))
     : null;
 
   return (
@@ -102,7 +104,7 @@ export default function DashboardPage() {
           </div>
 
           {/* New scan form */}
-          <form onSubmit={handleNewScan} className="flex gap-2">
+          <form onSubmit={(e) => void handleNewScan(e)} className="flex gap-2">
             <input
               type="url"
               value={newUrl}
@@ -185,6 +187,12 @@ export default function DashboardPage() {
           ) : error ? (
             <div className="text-center py-16">
               <p className="text-red-400 text-sm">{error}</p>
+              <button
+                onClick={() => window.location.reload()}
+                className="mt-3 text-xs text-indigo-400 hover:text-indigo-300 underline"
+              >
+                Retry
+              </button>
             </div>
           ) : scans.length === 0 ? (
             <div className="text-center py-16">
@@ -231,8 +239,8 @@ export default function DashboardPage() {
                         </a>
                       </td>
                       <td className="px-6 py-4">
-                        <span className={`font-bold ${getScoreColor(scan.score)}`}>
-                          {scan.score !== null ? `${scan.score}/100` : '—'}
+                        <span className={`font-bold ${getScoreColor(scan.totalScore)}`}>
+                          {scan.totalScore !== null ? `${scan.totalScore}/100` : '—'}
                         </span>
                       </td>
                       <td className="px-6 py-4">{getStatusBadge(scan.status)}</td>

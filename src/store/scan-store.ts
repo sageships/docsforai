@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 
+import { POLL_INTERVAL_MS, MAX_POLL_ATTEMPTS } from '@/lib/constants';
 import type { Scan } from '@/types';
 
 interface ScanState {
@@ -11,9 +12,6 @@ interface ScanState {
   reset: () => void;
 }
 
-const POLL_INTERVAL = 2000;
-const MAX_POLL_ATTEMPTS = 150; // 5 minutes
-
 async function pollUntilComplete(id: string, onUpdate: (scan: Scan) => void): Promise<Scan> {
   let attempts = 0;
 
@@ -21,17 +19,17 @@ async function pollUntilComplete(id: string, onUpdate: (scan: Scan) => void): Pr
     const res = await fetch(`/api/scan/${id}`);
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      throw new Error(data.error ?? `Failed to fetch scan: ${res.status}`);
+      throw new Error((data as { error?: string }).error ?? `Failed to fetch scan: ${res.status}`);
     }
 
-    const scan: Scan = await res.json();
+    const scan = (await res.json()) as Scan;
     onUpdate(scan);
 
     if (scan.status === 'completed' || scan.status === 'failed') {
       return scan;
     }
 
-    await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL));
+    await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
     attempts++;
   }
 
@@ -55,13 +53,15 @@ export const useScanStore = create<ScanState>((set) => ({
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error ?? `Failed to start scan: ${res.status}`);
+        throw new Error(
+          (data as { error?: string }).error ?? `Failed to start scan: ${res.status}`,
+        );
       }
 
-      const scan: Scan = await res.json();
-      set({ currentScan: scan });
+      // API returns { scanId, redirectUrl } — NOT a full Scan object
+      const { scanId } = (await res.json()) as { scanId: string; redirectUrl: string };
 
-      const completed = await pollUntilComplete(scan.id, (updated) => {
+      const completed = await pollUntilComplete(scanId, (updated) => {
         set({ currentScan: updated });
       });
 
@@ -79,10 +79,12 @@ export const useScanStore = create<ScanState>((set) => ({
       const res = await fetch(`/api/scan/${id}`);
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error ?? `Failed to fetch scan: ${res.status}`);
+        throw new Error(
+          (data as { error?: string }).error ?? `Failed to fetch scan: ${res.status}`,
+        );
       }
 
-      const scan: Scan = await res.json();
+      const scan = (await res.json()) as Scan;
       set({ currentScan: scan, isScanning: false });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';

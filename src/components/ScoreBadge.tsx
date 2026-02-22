@@ -5,7 +5,7 @@ import { useState } from 'react';
 interface ScoreBadgeProps {
   score: number;
   scanId: string;
-  docsUrl: string;
+  docsUrl?: string;
 }
 
 function getScoreColor(score: number): string {
@@ -20,7 +20,7 @@ function getScoreLabel(score: number): string {
   return 'AI-ready';
 }
 
-export default function ScoreBadge({ score, scanId, docsUrl: _docsUrl }: ScoreBadgeProps) {
+export default function ScoreBadge({ score, scanId }: ScoreBadgeProps) {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   const color = getScoreColor(score);

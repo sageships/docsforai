@@ -11,6 +11,7 @@ import ScoreBadge from '@/components/ScoreBadge';
 import ScoreBreakdown from '@/components/ScoreBreakdown';
 import ScoreCard from '@/components/ScoreCard';
 import type { Scan } from '@/types';
+import { scoreResultToBreakdown } from '@/types';
 
 export default function ResultsPage() {
   const params = useParams();
@@ -31,10 +32,10 @@ export default function ResultsPage() {
       try {
         const res = await fetch(`/api/scan/${id}`);
         if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
+          const data = (await res.json().catch(() => ({}))) as { error?: string };
           throw new Error(data.error ?? 'Failed to load scan results');
         }
-        const data: Scan = await res.json();
+        const data = (await res.json()) as Scan;
 
         if (!active) return;
         setScan(data);
@@ -50,7 +51,7 @@ export default function ResultsPage() {
       }
     };
 
-    fetchScan();
+    void fetchScan();
 
     return () => {
       active = false;
@@ -103,6 +104,9 @@ export default function ResultsPage() {
     minute: '2-digit',
   });
 
+  // Convert ScoreResult → ScoreBreakdown[] for the ScoreBreakdown component
+  const scoreBreakdown = scan.scores ? scoreResultToBreakdown(scan.scores) : null;
+
   return (
     <div className="min-h-screen bg-gray-950 text-gray-100">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -123,7 +127,7 @@ export default function ResultsPage() {
             <p className="text-sm text-gray-500 mt-1">{scanDate}</p>
           </div>
           <button
-            onClick={handleShare}
+            onClick={() => void handleShare()}
             className="flex-shrink-0 flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-sm font-medium text-gray-300 hover:text-gray-100 transition-colors"
           >
             {copied ? (
@@ -164,8 +168,8 @@ export default function ResultsPage() {
           <div className="mb-16 flex justify-center">
             <ScanProgress
               status={scan.status}
-              pagesCrawled={scan.pagesCrawled}
-              totalPages={scan.totalPages}
+              pagesCrawled={scan.pagesScanned ?? 0}
+              totalPages={null}
               startedAt={scan.createdAt}
             />
           </div>
@@ -175,24 +179,24 @@ export default function ResultsPage() {
         {scan.status === 'failed' && (
           <div className="mb-12 rounded-xl border border-red-500/30 bg-red-500/10 p-6 text-center">
             <p className="text-red-400 font-medium">Scan failed</p>
-            {scan.error && <p className="text-sm text-gray-400 mt-1">{scan.error}</p>}
+            {scan.errorMessage && <p className="text-sm text-gray-400 mt-1">{scan.errorMessage}</p>}
           </div>
         )}
 
         {/* Completed results */}
-        {scan.status === 'completed' && scan.score !== null && (
+        {scan.status === 'completed' && scan.totalScore !== null && (
           <>
             {/* Score Card */}
             <div className="flex justify-center mb-16">
               <div className="bg-gray-900 rounded-2xl border border-gray-800 p-10 shadow-2xl">
-                <ScoreCard score={scan.score} size="lg" />
+                <ScoreCard score={scan.totalScore} size="lg" />
               </div>
             </div>
 
             {/* Score Breakdown */}
-            {scan.scoreBreakdown && scan.scoreBreakdown.length > 0 && (
+            {scoreBreakdown && scoreBreakdown.length > 0 && (
               <section className="mb-16">
-                <ScoreBreakdown breakdown={scan.scoreBreakdown} />
+                <ScoreBreakdown breakdown={scoreBreakdown} />
               </section>
             )}
 
@@ -212,7 +216,7 @@ export default function ResultsPage() {
 
             {/* Badge */}
             <section className="mb-16">
-              <ScoreBadge score={scan.score} scanId={scan.id} docsUrl={scan.url} />
+              <ScoreBadge score={scan.totalScore} scanId={scan.id} docsUrl={scan.url} />
             </section>
 
             {/* CTA */}

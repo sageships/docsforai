@@ -1,5 +1,11 @@
 import { PrismaClient } from '@prisma/client';
 
+import { getEnvConfig } from './env';
+
+// Validate required environment variables at startup.
+// Throws fast with a clear error if any are missing.
+getEnvConfig();
+
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };

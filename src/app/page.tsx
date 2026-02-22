@@ -305,16 +305,12 @@ export default function HomePage() {
 
       {/* Social proof */}
       <section className="relative z-10 py-20 px-6 max-w-5xl mx-auto text-center">
-        <p className="text-gray-500 text-sm uppercase tracking-widest mb-10 font-medium">
-          Trusted by engineering teams at
+        <p className="text-gray-500 text-sm uppercase tracking-widest mb-4 font-medium">
+          Built for teams who care about developer experience
         </p>
-        <div className="flex items-center justify-center gap-12 flex-wrap opacity-40">
-          {['Stripe', 'Vercel', 'Linear', 'Notion', 'Supabase', 'PlanetScale'].map((name) => (
-            <span key={name} className="text-xl font-bold text-gray-400 tracking-tight">
-              {name}
-            </span>
-          ))}
-        </div>
+        <p className="text-gray-600 text-sm">
+          Join developers optimizing their docs for the AI-first era.
+        </p>
       </section>
 
       {/* CTA banner */}
@@ -354,18 +350,9 @@ export default function HomePage() {
               D
             </div>
             <span className="font-semibold">DocsForAI</span>
-            <span className="text-gray-600 text-sm ml-2">© 2025</span>
+            <span className="text-gray-600 text-sm ml-2">© {new Date().getFullYear()}</span>
           </div>
           <div className="flex items-center gap-8 text-sm text-gray-500">
-            <Link href="/privacy" className="hover:text-gray-300 transition-colors">
-              Privacy
-            </Link>
-            <Link href="/terms" className="hover:text-gray-300 transition-colors">
-              Terms
-            </Link>
-            <Link href="/pricing" className="hover:text-gray-300 transition-colors">
-              Pricing
-            </Link>
             <a
               href="https://twitter.com"
               target="_blank"

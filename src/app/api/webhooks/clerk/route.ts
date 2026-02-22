@@ -86,13 +86,11 @@ export async function POST(request: Request): Promise<NextResponse> {
         data: { email, name },
       });
     } else if (type === 'user.deleted') {
-      // Cascade delete: scans are deleted first, then user
-      await prisma.scan.deleteMany({
-        where: { user: { clerkId: data.id } },
-      });
-      await prisma.user.delete({
-        where: { clerkId: data.id },
-      });
+      // Atomic cascade delete: both operations succeed or both fail
+      await prisma.$transaction([
+        prisma.scan.deleteMany({ where: { user: { clerkId: data.id } } }),
+        prisma.user.delete({ where: { clerkId: data.id } }),
+      ]);
     }
 
     return successResponse({ received: true });

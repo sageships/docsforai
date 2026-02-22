@@ -26,6 +26,11 @@ const priorityConfig = {
   },
 };
 
+/** Stable ID derived from category + title so "done" state survives re-sorts. */
+function recId(rec: Recommendation): string {
+  return `${rec.category}::${rec.title}`;
+}
+
 interface RecommendationCardProps {
   rec: Recommendation;
   done: boolean;
@@ -47,6 +52,7 @@ function RecommendationCard({ rec, done, onToggle }: RecommendationCardProps) {
       <div className="flex items-start gap-3">
         <button
           onClick={onToggle}
+          aria-label={done ? 'Mark as not done' : 'Mark as done'}
           className={`mt-0.5 w-5 h-5 flex-shrink-0 rounded border-2 transition-colors flex items-center justify-center ${
             done ? 'bg-green-500 border-green-500' : 'border-gray-600 hover:border-gray-400'
           }`}
@@ -110,15 +116,17 @@ function RecommendationCard({ rec, done, onToggle }: RecommendationCardProps) {
 }
 
 export default function Recommendations({ recommendations }: RecommendationsProps) {
-  const [doneIds, setDoneIds] = useState<Set<number>>(new Set());
+  // Use stable string IDs instead of array indices so "done" state
+  // is not invalidated when items are reordered or added/removed.
+  const [doneIds, setDoneIds] = useState<Set<string>>(new Set());
 
-  const toggle = (index: number) => {
+  const toggle = (id: string) => {
     setDoneIds((prev) => {
       const next = new Set(prev);
-      if (next.has(index)) {
-        next.delete(index);
+      if (next.has(id)) {
+        next.delete(id);
       } else {
-        next.add(index);
+        next.add(id);
       }
       return next;
     });
@@ -132,14 +140,6 @@ export default function Recommendations({ recommendations }: RecommendationsProp
     high: sorted.filter((r) => r.priority === 'high'),
     medium: sorted.filter((r) => r.priority === 'medium'),
     low: sorted.filter((r) => r.priority === 'low'),
-  };
-
-  const globalIndex = (priority: 'high' | 'medium' | 'low', localIdx: number): number => {
-    const highLen = grouped.high.length;
-    const medLen = grouped.medium.length;
-    if (priority === 'high') return localIdx;
-    if (priority === 'medium') return highLen + localIdx;
-    return highLen + medLen + localIdx;
   };
 
   const doneCount = doneIds.size;
@@ -183,14 +183,14 @@ export default function Recommendations({ recommendations }: RecommendationsProp
                 {config.label} ({group.length})
               </h3>
               <div className="space-y-3">
-                {group.map((rec, i) => {
-                  const idx = globalIndex(priority, i);
+                {group.map((rec) => {
+                  const id = recId(rec);
                   return (
                     <RecommendationCard
-                      key={idx}
+                      key={id}
                       rec={rec}
-                      done={doneIds.has(idx)}
-                      onToggle={() => toggle(idx)}
+                      done={doneIds.has(id)}
+                      onToggle={() => toggle(id)}
                     />
                   );
                 })}
