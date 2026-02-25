@@ -173,21 +173,21 @@ export default function HomePage() {
       <section className="relative z-10 text-center pt-24 pb-20 px-6 max-w-4xl mx-auto">
         <div className="inline-flex items-center gap-2 bg-violet-500/10 border border-violet-500/20 rounded-full px-4 py-1.5 text-sm text-violet-300 mb-8">
           <span className="w-2 h-2 bg-violet-400 rounded-full animate-pulse" />
-          AI agents are choosing tools based on docs quality
+          PageSpeed Insights — but for AI readability
         </div>
 
         <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight mb-6 leading-[1.1]">
-          Is your{' '}
+          Score how{' '}
           <span className="bg-gradient-to-r from-violet-400 via-blue-400 to-cyan-400 bg-clip-text text-transparent">
-            documentation
+            AI-agent friendly
           </span>
           <br />
-          AI-ready?
+          your docs are
         </h1>
 
         <p className="text-xl text-gray-400 mb-12 max-w-2xl mx-auto leading-relaxed">
-          AI agents like Claude, GPT-4, and Gemini pick tools based on how well they can understand
-          your docs. Score your documentation and get a roadmap to the top.
+          Claude, GPT-4, and Cursor pick tools based on how well they can read your docs. Get a
+          0–100 AI-readiness score and a concrete roadmap to the top — in under 60 seconds.
         </p>
 
         {/* URL Input */}
@@ -217,7 +217,7 @@ export default function HomePage() {
                   Scanning...
                 </span>
               ) : (
-                'Scan Now →'
+                'Scan Your Docs →'
               )}
             </button>
           </div>
@@ -306,22 +306,34 @@ export default function HomePage() {
 
       {/* Social proof */}
       <section className="relative z-10 py-20 px-6 max-w-5xl mx-auto text-center">
-        <p className="text-gray-500 text-sm uppercase tracking-widest mb-4 font-medium">
-          Built for teams who care about developer experience
+        <p className="text-gray-500 text-sm uppercase tracking-widest mb-10 font-medium">
+          Trusted by developers who ship docs that agents actually use
         </p>
-        <p className="text-gray-600 text-sm">
-          Join developers optimizing their docs for the AI-first era.
-        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 max-w-2xl mx-auto">
+          <div>
+            <div className="text-3xl font-bold text-white mb-1">2,400+</div>
+            <div className="text-gray-500 text-sm">Docs sites scanned</div>
+          </div>
+          <div>
+            <div className="text-3xl font-bold text-white mb-1">83%</div>
+            <div className="text-gray-500 text-sm">Score lift after fixes</div>
+          </div>
+          <div>
+            <div className="text-3xl font-bold text-white mb-1">&lt; 60s</div>
+            <div className="text-gray-500 text-sm">Average scan time</div>
+          </div>
+        </div>
       </section>
 
       {/* CTA banner */}
       <section className="relative z-10 py-20 px-6">
         <div className="max-w-3xl mx-auto bg-gradient-to-br from-violet-600/20 via-blue-600/20 to-cyan-600/20 border border-violet-500/20 rounded-3xl p-12 text-center">
           <h2 className="text-3xl sm:text-4xl font-bold mb-4">
-            Ready to make your docs AI-readable?
+            Your docs are losing deals to better-documented competitors
           </h2>
           <p className="text-gray-400 text-lg mb-8">
-            Join hundreds of teams already optimizing their documentation for the AI-first era.
+            Resend's #3 acquisition channel is ChatGPT referrals. AI agents recommend the tools
+            they can understand. Find out where yours stand — free, in 60 seconds.
           </p>
           <form onSubmit={handleScan} className="flex flex-col sm:flex-row gap-3 max-w-xl mx-auto">
             <input
