@@ -63,6 +63,8 @@ async function runScanPipeline(scanId: string, normalizedUrl: string): Promise<v
               hasLlmsFullTxt: crawlResult.hasLlmsFullTxt,
               hasSitemap: crawlResult.hasSitemap,
               hasRssFeed: crawlResult.hasRssFeed,
+              isSpa: crawlResult.isSpa,
+              spaNote: crawlResult.spaNote,
               docsStructure: crawlResult.docsStructure,
               errors: crawlResult.errors,
             },

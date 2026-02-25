@@ -45,6 +45,8 @@ export interface CrawlResult {
   hasLlmsFullTxt: boolean;
   hasSitemap: boolean;
   hasRssFeed: boolean;
+  isSpa: boolean;
+  spaNote?: string;
   docsStructure: {
     hasSidebar: boolean;
     hasNavigation: boolean;
@@ -78,6 +80,23 @@ function isSameDomain(url: string, rootUrl: string): boolean {
   }
 }
 
+/**
+ * Check if a URL is within the same base path as the start URL.
+ * e.g. startUrl = https://example.com/docs/v2/ → only follow links under /docs/v2/
+ */
+function isWithinBasePath(url: string, startUrl: string): boolean {
+  try {
+    const u = new URL(url);
+    const s = new URL(startUrl);
+    if (u.hostname !== s.hostname) return false;
+    // Derive the "docs root" path — strip the last path segment if it looks like a page slug
+    const basePath = s.pathname.replace(/\/[^/]+$/, '') || '/';
+    return u.pathname.startsWith(basePath);
+  } catch {
+    return false;
+  }
+}
+
 function isDocUrl(url: string): boolean {
   const docPatterns = [
     /\/docs\//i,
@@ -93,6 +112,19 @@ function isDocUrl(url: string): boolean {
     /\/manual\//i,
   ];
   return docPatterns.some((p) => p.test(url));
+}
+
+/**
+ * Detect if a page appears to be a JavaScript SPA with no server-rendered content.
+ * Returns true when the body has almost no text (all content is loaded via JS).
+ */
+function isSpaPage(html: string): boolean {
+  const $ = cheerio.load(html);
+  // Remove scripts and styles before checking text
+  $('script, style').remove();
+  const bodyText = $('body').text().replace(/\s+/g, ' ').trim();
+  // If body text is very short, it's almost certainly an SPA shell
+  return bodyText.length < 200;
 }
 
 async function fetchWithTimeout(
@@ -157,6 +189,81 @@ function isDisallowed(url: string, disallowedPaths: Set<string>): boolean {
     return false;
   }
   return false;
+}
+
+/**
+ * Fetch and parse a sitemap.xml, returning all discovered URLs.
+ * Handles both standard sitemaps and sitemap index files (which reference other sitemaps).
+ * Filters results to only include URLs within the same domain as rootUrl.
+ */
+async function fetchSitemapUrls(rootUrl: string, startUrl: string): Promise<string[]> {
+  const urls: string[] = [];
+
+  async function parseSingleSitemap(sitemapUrl: string, depth = 0): Promise<void> {
+    if (depth > 2) return; // prevent infinite recursion
+    try {
+      const res = await fetchWithTimeout(sitemapUrl, {
+        headers: { 'User-Agent': CRAWLER_USER_AGENT, Accept: 'application/xml, text/xml, */*' },
+      }, DEFAULT_TIMEOUT_MS);
+      if (!res.ok) return;
+
+      const contentType = res.headers.get('content-type') || '';
+      // If server returns HTML instead of XML, it's an SPA shell — bail
+      if (contentType.includes('text/html')) return;
+
+      const text = await res.text();
+      if (!text.trim().startsWith('<')) return; // Not XML
+
+      const $ = cheerio.load(text, { xmlMode: true });
+
+      // Sitemap index — contains references to other sitemaps
+      const sitemapRefs = $('sitemapindex > sitemap > loc');
+      if (sitemapRefs.length > 0) {
+        const subSitemaps: string[] = [];
+        sitemapRefs.each((_, el) => {
+          const loc = $(el).text().trim();
+          if (loc) subSitemaps.push(loc);
+        });
+        // Parse sub-sitemaps in parallel (limit to first 5 to avoid overload)
+        await Promise.all(subSitemaps.slice(0, 5).map((u) => parseSingleSitemap(u, depth + 1)));
+        return;
+      }
+
+      // Regular sitemap — contains <url><loc>...</loc></url> entries
+      $('urlset > url > loc').each((_, el) => {
+        const loc = $(el).text().trim();
+        if (loc && isSameDomain(loc, rootUrl)) {
+          urls.push(loc);
+        }
+      });
+
+      // Some sitemaps use just <loc> at the top level
+      if (urls.length === 0) {
+        $('loc').each((_, el) => {
+          const loc = $(el).text().trim();
+          if (loc && isSameDomain(loc, rootUrl)) {
+            urls.push(loc);
+          }
+        });
+      }
+    } catch {
+      // ignore sitemap fetch errors
+    }
+  }
+
+  // Try the standard sitemap location
+  await parseSingleSitemap(new URL('/sitemap.xml', rootUrl).href);
+
+  // Also try sitemap_index.xml and sitemap/sitemap.xml
+  if (urls.length === 0) {
+    await parseSingleSitemap(new URL('/sitemap_index.xml', rootUrl).href);
+  }
+  if (urls.length === 0) {
+    await parseSingleSitemap(new URL('/sitemap/sitemap.xml', rootUrl).href);
+  }
+
+  // Deduplicate and filter to same domain
+  return [...new Set(urls)].filter((u) => isSameDomain(u, rootUrl));
 }
 
 function parsePage(
@@ -227,18 +334,23 @@ function parsePage(
   const hasNumberedLists = $('ol li').length > 0;
   const hasTables = $('table').length > 0;
 
-  // Text content (remove scripts, styles, nav)
-  $('script, style, nav, header, footer, aside').remove();
-  const textContent = $('body').text().replace(/\s+/g, ' ').trim().slice(0, MAX_TEXT_CONTENT_CHARS);
-
-  // Links
+  // ─── IMPORTANT: Extract links BEFORE removing nav/aside elements ────────────
+  // Many documentation sites embed their sidebar navigation inside <nav> and
+  // <aside> elements. If we remove those BEFORE extracting links, the crawler
+  // loses all the sidebar links needed to discover sub-pages.
   const links: string[] = [];
   $('a[href]').each((_, el) => {
     const href = $(el).attr('href');
     if (!href) return;
+    // Skip javascript: and mailto: links
+    if (href.startsWith('javascript:') || href.startsWith('mailto:')) return;
     const normalized = normalizeUrl(href, url);
     if (normalized) links.push(normalized);
   });
+
+  // Text content — NOW safe to remove nav/aside for clean text extraction
+  $('script, style, nav, header, footer, aside').remove();
+  const textContent = $('body').text().replace(/\s+/g, ' ').trim().slice(0, MAX_TEXT_CONTENT_CHARS);
 
   return {
     url,
@@ -346,6 +458,53 @@ export async function crawlDocs(startUrl: string): Promise<CrawlResult> {
   const hasSitemap = sitemapResult.exists;
   const hasRssFeed = rssResult.exists;
 
+  // ── SPA detection: check if the start page is JS-rendered ──────────────────
+  // We do a quick fetch of the start URL to detect if the site is SPA-based.
+  // If so, we rely on the sitemap to discover pages instead of HTML link following.
+  let isSpa = false;
+  let spaNote: string | undefined;
+
+  try {
+    const probeRes = await fetchWithTimeout(startUrl, {
+      headers: { 'User-Agent': CRAWLER_USER_AGENT, Accept: 'text/html,application/xhtml+xml' },
+    }, DEFAULT_TIMEOUT_MS);
+    if (probeRes.ok) {
+      const probeHtml = await probeRes.text();
+      if (isSpaPage(probeHtml)) {
+        isSpa = true;
+        spaNote =
+          'This documentation site appears to be a JavaScript-rendered SPA (Single Page Application). ' +
+          'The crawler cannot follow links discovered through JavaScript execution. ' +
+          'Attempting URL discovery via sitemap.xml and other static sources.';
+        console.log(`[crawler] SPA detected at ${startUrl} — switching to sitemap-based discovery`);
+      }
+    }
+  } catch {
+    // ignore probe errors
+  }
+
+  // ── Seed queue from sitemap (essential for SPA sites, beneficial for all) ──
+  // Always attempt sitemap-based URL discovery. For SPA sites this is the
+  // primary crawl strategy. For static sites it supplements link following.
+  const sitemapUrls = await fetchSitemapUrls(rootUrl, startUrl);
+  if (sitemapUrls.length > 0) {
+    console.log(`[crawler] Discovered ${sitemapUrls.length} URLs from sitemap`);
+    // Prioritise URLs that look like docs pages; push others to the back
+    for (const u of sitemapUrls) {
+      if (!queue.includes(u)) {
+        if (isDocUrl(u) || isWithinBasePath(u, startUrl)) {
+          queue.unshift(u); // high priority
+        } else {
+          queue.push(u);
+        }
+      }
+    }
+  } else if (isSpa) {
+    // SPA site with no sitemap — we can still crawl the pages we know about
+    // by looking at any absolute URLs baked into the HTML (e.g. canonical tags)
+    console.log(`[crawler] SPA with no sitemap — only crawling known entry URL`);
+  }
+
   // Crawl in parallel batches
   while (queue.length > 0 && pages.length < MAX_PAGES) {
     // Build a batch of URLs to process concurrently
@@ -375,10 +534,13 @@ export async function crawlDocs(startUrl: string): Promise<CrawlResult> {
         pages.push(page);
 
         // Enqueue discovered links
+        // For SPA sites: the links array from parsePage() will be mostly empty
+        // (nothing to follow from JS-rendered pages). The sitemap already seeded
+        // the queue above, so this is mostly a no-op for SPAs.
         for (const link of page.links) {
           if (!visited.has(link) && isSameDomain(link, rootUrl)) {
-            // Prioritise likely doc pages
-            if (isDocUrl(link) || isSameDomain(link, startUrl)) {
+            // Prioritise likely doc pages or pages within the same docs path
+            if (isDocUrl(link) || isWithinBasePath(link, startUrl)) {
               queue.unshift(link);
             } else {
               queue.push(link);
@@ -403,6 +565,8 @@ export async function crawlDocs(startUrl: string): Promise<CrawlResult> {
     hasLlmsFullTxt,
     hasSitemap,
     hasRssFeed,
+    isSpa,
+    spaNote,
     docsStructure,
     errors,
   };

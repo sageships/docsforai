@@ -28,6 +28,8 @@ interface ScanResponse {
     hasLlmsFullTxt: boolean;
     hasSitemap: boolean;
     hasRssFeed: boolean;
+    isSpa?: boolean;
+    spaNote?: string;
     docsStructure: {
       hasSidebar: boolean;
       hasNavigation: boolean;

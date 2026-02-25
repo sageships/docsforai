@@ -46,6 +46,10 @@ export interface Scan {
     hasLlmsFullTxt: boolean;
     hasSitemap: boolean;
     hasRssFeed: boolean;
+    /** True when the site is a JavaScript SPA with no server-rendered content. */
+    isSpa?: boolean;
+    /** Human-readable explanation when the site is detected as an SPA. */
+    spaNote?: string;
     docsStructure: {
       hasSidebar: boolean;
       hasNavigation: boolean;
